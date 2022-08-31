@@ -1,6 +1,7 @@
 // add requirements
 const { CommandoClient } = require('discord.js-commando');
 const path = require('path');
+require('dotenv').config();
 
 // create new commando client
 const client = new CommandoClient({
@@ -25,7 +26,7 @@ client.registry
 
 // on start, connect to discord + set activity
 client.once('ready', () => {
-	console.log('logged in as $(client.user.tag)! ($(client.user.id))');
+	console.log('logged in as ' + client.user.tag + '! (' + client.user.id + ')');
 	client.user.setActivity('pbot.help', { type: 'PLAYING' });
 })
 
