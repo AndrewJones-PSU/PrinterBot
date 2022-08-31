@@ -1,12 +1,8 @@
 {
-  "dependencies": {
-    "discord.js-commando": "^0.12.3"
-  },
   "name": "printerbot",
   "description": "PrinterBot is a discord bot that takes print queries from users and prints them\r using a receipt printer.",
   "version": "1.0.0",
   "main": "index.js",
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -19,5 +15,10 @@
   "bugs": {
     "url": "https://github.com/AndrewJones-PSU/PrinterBot/issues"
   },
-  "homepage": "https://github.com/AndrewJones-PSU/PrinterBot"
+  "homepage": "https://github.com/AndrewJones-PSU/PrinterBot",
+  "dependencies": {
+    "discord.js": "^12.5.3",
+    "discord.js-commando": "github:discordjs/Commando",
+    "dotenv": "^16.0.2"
+  }
 }
