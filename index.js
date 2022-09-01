@@ -1,37 +1,21 @@
-// add requirements
-const { CommandoClient } = require('discord.js-commando');
+// Require the necessary discord.js classes
+const { Client, GatewayIntentBits } = require('discord.js');
 const path = require('path');
 require('dotenv').config();
 
-// create new commando client
-const client = new CommandoClient({
-	commandPrefix: 'pbot.',
-	owner: process.env.OWNER_ID
-});
+// Create a new client instance
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-
-// register commands and command groups
-client.registry
-	.registerDefaultTypes()
-	.registerGroups([
-		['print', 'Print Commands'],
-		['format', 'Print Formatting Commands'],
-		['mods', 'Moderation Commands'],
-		['misc', 'Miscellaneous Commands']
-	])
-	.registerDefaultGroups()
-	.registerDefaultCommands()
-	.registerCommandsIn(path.join(__dirname, 'commands'));
-
-
-// on start, connect to discord + set activity
+// When the client is ready, run this code (only once)
 client.once('ready', () => {
-	console.log('logged in as ' + client.user.tag + '! (' + client.user.id + ')');
-	client.user.setActivity('pbot.help', { type: 'PLAYING' });
-})
+	client.once('ready', () => {
+		console.log('logged in as ' + client.user.tag + '! (' + client.user.id + ')');
+		client.user.setActivity('pbot.help', { type: 'PLAYING' });
+	})
+});
 
 // log errors, if any
 client.on('error', console.error);
 
-// login to discord
+// Login to Discord with your client's token
 client.login(process.env.BOT_TOKEN);
