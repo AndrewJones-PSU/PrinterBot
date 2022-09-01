@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/AndrewJones-PSU/PrinterBot",
   "dependencies": {
+    "async-mutex": "^0.3.2",
     "discord.js": "^12.5.3",
     "discord.js-commando": "github:discordjs/Commando",
     "dotenv": "^16.0.2"
