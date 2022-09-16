@@ -20,6 +20,10 @@
     "@discordjs/rest": "^1.1.0",
     "async-mutex": "^0.3.2",
     "discord.js": "^14.3.0",
-    "dotenv": "^16.0.2"
+    "dotenv": "^16.0.2",
+    "escpos": "^3.0.0-alpha.6",
+    "escpos-serialport": "^3.0.0-alpha.4",
+    "serialport": "^9.2.8",
+    "unescape": "^1.0.1"
   }
 }
