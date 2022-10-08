@@ -1,4 +1,16 @@
-<h1>Hello, World!</h1>
-<p>
-    This is a sample page. Eventually you'll be able to upload print files to here.
-</p>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PrinterBot File Upload Page</title>
+</head>
+<body>
+    <h1>PrinterBot File Upload</h1>
+    <p>Accepted file types are: .txt .md .png .jpg <br>
+        Files will be printed in the order arranged.
+    </p>
+    <form method="POST", action="/preview", enctype="multipart/form-data">
+        <input type="file" name="files[]" multiple="multiple">
+        <input type="submit" value="Preview">
+    </form>
+</body>
+</html>
