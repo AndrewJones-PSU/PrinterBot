@@ -1,6 +1,6 @@
 // This file is the main application. It is responsible for
 // 1. Handling requests on the web server
-// 2. Initializing the upload webpage (this is always enabled)
+// 2. Initializing the upload webpage, if enabled
 // 3. Initializing the discord bot, if enabled
 
 const fs = require("fs");
@@ -10,9 +10,13 @@ const app = express();
 const port = 3000;
 require("dotenv").config();
 
+// Load in config.js
+const config = require("./config.js");
+
 // set up discord bot, if enabled
-if (process.env.DISCORD_BOT_ENABLED == "true") {
-    // TODO: fix dbot.js to module.exports properly
+if (config.discord.enabled) {
+    const initBot = require("./dbot.js");
+    initBot();
 }
 
 // setting up get & post requests
@@ -36,10 +40,16 @@ app.post("/nfprint", (req, res) => {
     // TODO: verify uploaded image and send it to the printer
 });
 
-// set up upload webpage
+// set up upload webpage, if enabled
 // This function simply serves the upload webpage
 app.get("/", (req, res) => {
-    res.sendFile("pages/index.html", { root: __dirname });
+    if (config.app.siteEnabled) {
+        res.status(200);
+        res.sendFile("pages/index.html", { root: __dirname });
+    } else {
+        res.status(403);
+        res.send("The upload page is disabled.");
+    }
 });
 
 app.listen(port, () => {
