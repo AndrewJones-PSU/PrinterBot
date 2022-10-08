@@ -1,5 +1,4 @@
 // This file holds all functions related to printing and processing files for printing.
-// For reference
 
 // This function takes a text file and converts it to a printable image
 // Markdown is formatted appropriately
