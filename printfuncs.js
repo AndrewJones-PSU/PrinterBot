@@ -1,6 +1,6 @@
 // This file holds all functions related to printing and processing files for printing.
-const puppeteer = require("puppeteer");
 const md = require("markdown-it")();
+const sharp = require("sharp");
 
 // Load in config.js
 const config = require("./config.js");
@@ -86,11 +86,30 @@ function textToPrintableImage(text, puppeteerInstance) {
     return image;
 }
 
-// This function takes an image file and converts it to a printable image
+// This function takes a binary image buffer and converts it to a printable image
 // This function has two primary tasks:
 // 1. Resize the image to fit the printer's width
 // 2. Convert the image to pure black and white (no grayscale or color)
-function imageToPrintableImage(imgFile) {}
+// TODO: Make the pure black and white part of this better, rn it's acceptable but not great
+function imageToPrintableImage(image) {
+    // init sharp instance
+    let sharpImage = sharp(image);
+    // get metadata, compute resizing multiplication factor
+    let finalImage = sharpImage.metadata().then((metadata) => {
+        multFactor = config.printer.imageWidth / metadata.width;
+        return sharpImage
+            .resize({
+                // resize to printer width
+                width: config.printer.imageWidth,
+                height: Math.round(multFactor * metadata.height),
+            })
+            .normalize() // normalize the image (fits to 0-255)
+            .threshold() // convert to pure black and white
+            .toFormat("png") // convert to png (if not already)
+            .toBuffer(); // return as buffer
+    });
+    return finalImage;
+}
 
 // This function validates that an image is printable
 // This function only checks that the image width is correct and that the image is not too long
@@ -111,6 +130,7 @@ function loopingPrintQueue() {}
 module.exports = {
     filesToPrintableImages,
     textToPrintableImage,
+    imageToPrintableImage,
     validatePrintableImage,
     queueImages,
     loopingPrintQueue,
