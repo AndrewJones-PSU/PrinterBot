@@ -1,9 +1,90 @@
 // This file holds all functions related to printing and processing files for printing.
+const puppeteer = require("puppeteer");
+const md = require("markdown-it")();
 
-// This function takes a text file and converts it to a printable image
+// Load in config.js
+const config = require("./config.js");
+
+const allowedExtensions = ["png", "jpg", "jpeg", "txt", "md"];
+
+// This function takes an array of files, and converts them to printable images
+function filesToPrintableImages(files, puppeteerInstance) {
+    var printableImages = [];
+    // iterate through files, call appropriate function for each file type
+    // return an error if the file type is not supported
+    for (var i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.mimetype === "text/plain" && allowedExtensions.includes(path.extname(file.name))) {
+            printableImages.push(textToPrintableImage(file, puppeteerInstance));
+        } else if (file.mimetype.startsWith("image/") && allowedExtensions.includes(path.extname(file.name))) {
+            printableImages.push(imageToPrintableImage(file));
+        } else return "error: invalid file type";
+    }
+    return printableImages;
+}
+
+// This function takes text and converts it to a printable image
 // Markdown is formatted appropriately
 // Images are converted to a printable image through imageToPrintableImage first
-function textToPrintableImage(txtFile) {}
+function textToPrintableImage(text, puppeteerInstance) {
+    // convert MD to HTML
+    const mdrender = md.render(text);
+    // Add HTML to properly size the page/text
+    const html = `
+    <html>
+        <head>
+            <style>
+                body {
+                    margin: 0;
+                    font-size: 2em;
+                }
+                code {
+                    white-space: pre-wrap;
+                }
+            </style>
+        </head>
+        <body>
+            ${mdrender}
+        </body>
+    </html>`;
+
+    // TODO: iterate through HTML and convert images to printable images
+
+    // init puppeteer page for rendering image
+    const image = puppeteerInstance
+        .newPage()
+        // set page content to HTML and set viewport to printer width
+        .then((page) => {
+            return Promise.all([
+                page,
+                page.setContent(html),
+                page.setViewport({
+                    width: config.printer.imageWidth,
+                    height: 50, // this can be whatever, is overwritten in page.screenshot
+                }),
+            ]);
+        })
+        // take the shot
+        // promiseArray[0] is the page
+        .then((promiseArray) => {
+            return Promise.all([
+                promiseArray[0].screenshot({
+                    width: config.printer.imageWidth,
+                    fullPage: true,
+                }),
+                promiseArray[0],
+            ]);
+        })
+        // return image and close the page
+        // promiseArray[0] is the image
+        // promiseArray[1] is the page
+        .then((promiseArray) => {
+            promiseArray[1].close();
+            return promiseArray[0];
+        });
+    // return the image
+    return image;
+}
 
 // This function takes an image file and converts it to a printable image
 // This function has two primary tasks:
@@ -28,8 +109,8 @@ function loopingPrintQueue() {}
 
 // export functions
 module.exports = {
+    filesToPrintableImages,
     textToPrintableImage,
-    imageToPrintableImage,
     validatePrintableImage,
     queueImages,
     loopingPrintQueue,
