@@ -9,7 +9,6 @@ const fs = require("fs");
 const sharp = require("sharp");
 const events = require("events");
 const md = require("markdown-it")();
-const nodeHtmlToImage = require("node-html-to-image");
 const puppeteer = require("puppeteer");
 
 // printer config
