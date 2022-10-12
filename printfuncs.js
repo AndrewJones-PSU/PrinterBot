@@ -1,51 +1,36 @@
 // This file holds all functions related to printing and processing files for printing.
-const md = require("markdown-it")();
-const sharp = require("sharp");
-const linkedlist = require("@stdlib/utils-linked-list");
-const ReadWriteLock = require("rwlock");
-const escpos = require("escpos");
-const SerialPort = require("escpos-serialport");
+
+// load in all dependencies
+const md = require("markdown-it")(); // md --> html
+const sharp = require("sharp"); // image manipulation functions
+const puppeteer = require("puppeteer"); // virtual browser, used for rendering images from HTML
+const ReadWriteLock = require("rwlock"); // used to ensure queue correctness
+const events = require("events"); // event emitter for printing
+const escpos = require("escpos"); // escpos library for printing
+const SerialPort = require("escpos-serialport"); // serial port for escpos
 
 // init event emitter for print loop
 var eventEmitter = new events.EventEmitter();
 
 // printer config
-const device = new SerialPort("COM8");
 const options = {
     encoding: "GB18030",
 };
-const printer = new escpos.Printer(device, options);
 
 // Load in config.js
 const config = require("./config.js");
 
-// array of all file types to print
-const allowedExtensions = ["png", "jpg", "jpeg", "txt", "md"];
+// Load in queue.js
+const llqueue = require("./queue.js");
 
-// init queue LL
-var queue = linkedlist();
+// init queue LL and lock
+var queue = new llqueue();
 var queuelock = new ReadWriteLock();
-
-// This function takes an array of files, and converts them to printable images
-function filesToPrintableImages(files, puppeteerInstance) {
-    var printableImages = [];
-    // iterate through files, call appropriate function for each file type
-    // return an error if the file type is not supported
-    for (var i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (file.mimetype === "text/plain" && allowedExtensions.includes(path.extname(file.name))) {
-            printableImages.push(textToPrintableImage(file, puppeteerInstance));
-        } else if (file.mimetype.startsWith("image/") && allowedExtensions.includes(path.extname(file.name))) {
-            printableImages.push(imageToPrintableImage(file));
-        } else return "error: invalid file type";
-    }
-    return printableImages;
-}
 
 // This function takes text and converts it to a printable image
 // Markdown is formatted appropriately
-// Images are converted to a printable image through imageToPrintableImage first
-function textToPrintableImage(text, puppeteerInstance) {
+// Images are converted to a printable image base64 buffer through imageToPrintableImage first
+function textToPrintableImage(text) {
     // convert MD to HTML
     const mdrender = md.render(text);
     // Add HTML to properly size the page/text
@@ -67,11 +52,14 @@ function textToPrintableImage(text, puppeteerInstance) {
         </body>
     </html>`;
 
-    // TODO: iterate through HTML and convert images to printable images
+    // ! TODO: iterate through HTML and convert images to printable images
 
     // init puppeteer page for rendering image
-    const image = puppeteerInstance
-        .newPage()
+    const image = puppeteer
+        .launch()
+        .then((browser) => {
+            return browser.newPage();
+        })
         // set page content to HTML and set viewport to printer width
         .then((page) => {
             return Promise.all([
@@ -90,6 +78,7 @@ function textToPrintableImage(text, puppeteerInstance) {
                 promiseArray[0].screenshot({
                     width: config.printer.imageWidth,
                     fullPage: true,
+                    encoding: "base64",
                 }),
                 promiseArray[0],
             ]);
@@ -99,6 +88,7 @@ function textToPrintableImage(text, puppeteerInstance) {
         // promiseArray[1] is the page
         .then((promiseArray) => {
             promiseArray[1].close();
+            // ! TODO: split image into multiple images if it is too long (maxImageHeight)
             return promiseArray[0];
         });
     // return the image
@@ -113,9 +103,9 @@ function textToPrintableImage(text, puppeteerInstance) {
 // TODO: alternatively, allow the user to specify the threshold for black and white
 function imageToPrintableImage(image) {
     // init sharp instance
-    let sharpImage = sharp(image);
+    var sharpImage = sharp(image);
     // get metadata, compute resizing multiplication factor
-    let finalImage = sharpImage.metadata().then((metadata) => {
+    var finalImage = sharpImage.metadata().then((metadata) => {
         multFactor = config.printer.imageWidth / metadata.width;
         return sharpImage
             .resize({
@@ -126,22 +116,22 @@ function imageToPrintableImage(image) {
             .normalize() // normalize the image (fits to 0-255)
             .threshold() // convert to pure black and white
             .toFormat("png") // convert to png (if not already)
-            .toBuffer(); // return as buffer
+            .toBuffer() // return as buffer
+            .then((buffer) => {
+                return buffer.toString("base64");
+            });
     });
     return finalImage;
 }
 
+// TODO: implement this
 // This function validates that an image is printable
 // This function only checks that the image width is correct and that the image is not too long, as incorrectly sized
 // images can slow down or break the printer. Images that are not purely black and white will still print, it will just
 // look bad after printing, but it won't break or slow down the printer
 // This might vary by printer, but this is the case for the printer I'm using (Epson TM-T20II)
 function validatePrintableImage(imgFile) {
-    // check that the image width is correct
-    if (imgFile.width !== config.printer.imageWidth) return false;
-    // check that the image is not too long
-    if (imgFile.height > config.printer.maxImageHeight) return false;
-    // if all checks pass, return true
+    // TODO: implement this, for now just return true
     return true;
 }
 
@@ -153,17 +143,20 @@ function validatePrintableImage(imgFile) {
 function queueImages(imgFiles) {
     // check that the images are printable
     for (var i = 0; i < imgFiles.length; i++) {
-        if (!validatePrintableImage(imgFiles[i])) return false;
+        // TODO: validate images, currently not implemented
     }
+
     // add images to queue
-    queuelock.writeLock((release) => {
-        for (var i = 0; i < imgFiles.length; i++) {
-            queue.push(imgFiles[i]);
-        }
-        // after all images, add cut command and release lock
-        queue.push("cut");
-        release();
-        return true;
+    return new Promise((resolve, reject) => {
+        queuelock.writeLock((release) => {
+            for (var i = 0; i < imgFiles.length; i++) {
+                queue.push(imgFiles[i]);
+            }
+            // after all images, add cut command and release lock
+            queue.push("cut");
+            release();
+            resolve(true);
+        });
     });
 }
 
@@ -174,7 +167,7 @@ function queueImages(imgFiles) {
 function loopingPrintQueue() {
     // check if the queue is empty
     queuelock.readLock((release) => {
-        if (queue.length > 0) {
+        if (!queue.empty()) {
             // if not, init the print loop
             eventEmitter.emit("printNextImage", release);
             // the print loop will call this function again when it is done printing
@@ -185,6 +178,7 @@ function loopingPrintQueue() {
             setTimeout(loopingPrintQueue, 1000);
         }
     });
+    return;
 }
 
 // This event prints the next image in the queue, and calls itself again via an event emitter if there are more images in the queue
@@ -193,51 +187,70 @@ function loopingPrintQueue() {
 eventEmitter.on("printNextImage", (release) => {
     // load in the image
     const img = queue.shift();
+
     // if the image is undefined, queue is empty, call looping print queue, exit loop
-    if (img === undefined) {
+    if (img === null) {
         release();
         setTimeout(loopingPrintQueue, 1000);
         return;
     }
     // if the image is "cut", cut the paper, and recall this function
     if (img === "cut") {
+        // init device
+        const device = new SerialPort("COM8");
         device.open((error) => {
             if (error) {
-                // log errors, recall looping print queue
+                console.log("error opening device");
                 console.log(error);
-                setTimeout(loopingPrintQueue, 1000);
-                return;
+            } else {
+                // init printer, cut paper, close printer + device
+                const printer = new escpos.Printer(device, options);
+                printer.cut().close();
+                device.close((error) => {
+                    if (error) {
+                        console.log("error closing device");
+                        console.log(error);
+                    }
+                    // recall this function regardless of errors
+                    // otherwise loop will exit which is suboptimal
+                    eventEmitter.emit("printNextImage", release);
+                });
             }
-            printer.cut();
-            printer.close();
-            eventEmitter.emit("printNextImage", release);
         });
+        return;
     }
     // load the image in, convert to base64
-    const b64image = new Buffer.from(img).toString("base64");
+    const b64image = img; //new Buffer.from(img).toString("base64");
     // add dataURI header
     const dataURI = `data:image/png;base64,${b64image}`;
     // load image and device for printing
     escpos.Image.load(dataURI, (image) => {
+        // init device, print image, close device, call print loop
+        const device = new SerialPort("COM8");
         device.open((error) => {
             if (error) {
-                // log errors, recall looping print queue
+                console.log("Error opening device");
                 console.log(error);
-                setTimeout(loopingPrintQueue, 1000);
-                return;
+            } else {
+                // init printer, print image, refuse to elaborate, close printer + device
+                const printer = new escpos.Printer(device, options);
+                printer.raster(image).close();
+                device.close((error) => {
+                    if (error) {
+                        console.log("Error closing device");
+                        console.log(error);
+                    }
+                    // recall this function regardless of errors
+                    // otherwise loop will exit which is suboptimal
+                    eventEmitter.emit("printNextImage", release);
+                });
             }
-            // print image, close device, call print loop
-            printer.align("ct");
-            printer.raster(image);
-            printer.close();
-            eventEmitter.emit("printNextImage", release);
         });
     });
 });
 
 // export functions
 module.exports = {
-    filesToPrintableImages,
     textToPrintableImage,
     imageToPrintableImage,
     validatePrintableImage,
