@@ -91,6 +91,7 @@ function textToPrintableImage(text, puppeteerInstance) {
 // 1. Resize the image to fit the printer's width
 // 2. Convert the image to pure black and white (no grayscale or color)
 // TODO: Make the pure black and white part of this better, rn it's acceptable but not great
+// TODO: alternatively, allow the user to specify the threshold for black and white
 function imageToPrintableImage(image) {
     // init sharp instance
     let sharpImage = sharp(image);
@@ -112,8 +113,18 @@ function imageToPrintableImage(image) {
 }
 
 // This function validates that an image is printable
-// This function only checks that the image width is correct and that the image is not too long
-function validatePrintableImage(imgFile) {}
+// This function only checks that the image width is correct and that the image is not too long, as incorrectly sized
+// images can slow down or break the printer. Images that are not purely black and white will still print, it will just
+// look bad after printing, but it won't break or slow down the printer
+// This might vary by printer, but this is the case for the printer I'm using (Epson TM-T20II)
+function validatePrintableImage(imgFile) {
+    // check that the image width is correct
+    if (imgFile.width !== config.printer.imageWidth) return false;
+    // check that the image is not too long
+    if (imgFile.height > config.printer.maxImageHeight) return false;
+    // if all checks pass, return true
+    return true;
+}
 
 // This function queues an array of image files for printing
 // Images are first validated before being queued
