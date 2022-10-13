@@ -22,11 +22,40 @@ const config = require("./config.js");
 
 // Load in queue.js
 const llqueue = require("./queue.js");
+const { fstat } = require("fs");
 
 // init queue LL and lock
 var queue = new llqueue();
 var queuelock = new ReadWriteLock();
 
+// This function takes in files and converts them to printable images
+// Files are passed in as data buffers, and are converted to printable images
+// File types are required in order to correctly convert the files to printable images
+// File types should either be "text" or "image"
+function buffersToPrintableImages(files, fileTypes) {
+    const printableImages = [];
+    for (var i = 0; i < files.length; i++) {
+        printableImages.push(
+            new Promise((resolve, reject) => {
+                if (fileTypes[i] == "text") {
+                    // convert text to printable image
+                    textToPrintableImage(files[i]).then((image) => {
+                        resolve(image);
+                    });
+                } else if (fileTypes[i] == "image") {
+                    // convert image to printable image
+                    imageToPrintableImage(files[i]).then((image) => {
+                        resolve(image);
+                    });
+                } else {
+                    console.log("Error in buffersToPrintableImages: invalid file type");
+                    reject("ERROR: Invalid file type. Type was: " + fileTypes[i]);
+                }
+            })
+        );
+    }
+    return Promise.all(printableImages);
+}
 // This function takes text and converts it to a printable image
 // Markdown is formatted appropriately
 // Images are converted to a printable image base64 buffer through imageToPrintableImage first
@@ -169,6 +198,7 @@ function loopingPrintQueue() {
     queuelock.readLock((release) => {
         if (!queue.empty()) {
             // if not, init the print loop
+
             eventEmitter.emit("printNextImage", release);
             // the print loop will call this function again when it is done printing
             // the print loop will also release the read lock when it is done
@@ -181,13 +211,14 @@ function loopingPrintQueue() {
     return;
 }
 
+const fs = require("fs");
+
 // This event prints the next image in the queue, and calls itself again via an event emitter if there are more images in the queue
 // This function does not check if the image is printable, so it should only be called after the image has been validated
 // This function is probably inefficient since we init a new printer instance every time, and could probably be improved
 eventEmitter.on("printNextImage", (release) => {
     // load in the image
     const img = queue.shift();
-
     // if the image is undefined, queue is empty, call looping print queue, exit loop
     if (img === null) {
         release();
@@ -200,7 +231,7 @@ eventEmitter.on("printNextImage", (release) => {
         const device = new SerialPort("COM8");
         device.open((error) => {
             if (error) {
-                console.log("error opening device");
+                console.log("Error on PrintNextImage: error opening device for cut");
                 console.log(error);
             } else {
                 // init printer, cut paper, close printer + device
@@ -208,7 +239,7 @@ eventEmitter.on("printNextImage", (release) => {
                 printer.cut().close();
                 device.close((error) => {
                     if (error) {
-                        console.log("error closing device");
+                        console.log("Error on PrintNextImage: error closing device for cut");
                         console.log(error);
                     }
                     // recall this function regardless of errors
@@ -219,17 +250,17 @@ eventEmitter.on("printNextImage", (release) => {
         });
         return;
     }
-    // load the image in, convert to base64
-    const b64image = img; //new Buffer.from(img).toString("base64");
-    // add dataURI header
-    const dataURI = `data:image/png;base64,${b64image}`;
+    const dataURI = img;
+
+    fs.writeFileSync("test.txt", dataURI);
+
     // load image and device for printing
     escpos.Image.load(dataURI, (image) => {
         // init device, print image, close device, call print loop
         const device = new SerialPort("COM8");
         device.open((error) => {
             if (error) {
-                console.log("Error opening device");
+                console.log("Error on PrintNextImage: error opening device for image");
                 console.log(error);
             } else {
                 // init printer, print image, refuse to elaborate, close printer + device
@@ -237,7 +268,7 @@ eventEmitter.on("printNextImage", (release) => {
                 printer.raster(image).close();
                 device.close((error) => {
                     if (error) {
-                        console.log("Error closing device");
+                        console.log("Error on PrintNextImage: error closing device for image");
                         console.log(error);
                     }
                     // recall this function regardless of errors
@@ -251,8 +282,9 @@ eventEmitter.on("printNextImage", (release) => {
 
 // export functions
 module.exports = {
-    textToPrintableImage,
-    imageToPrintableImage,
+    buffersToPrintableImages,
+    textToPrintableImage, // this may be removed in the future, since it's functionality is now included in buffersToPrintableImages
+    imageToPrintableImage, // this may be removed in the future, since it's functionality is now included in buffersToPrintableImages
     validatePrintableImage,
     queueImages,
     loopingPrintQueue,
